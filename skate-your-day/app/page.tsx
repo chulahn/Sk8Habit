@@ -1,18 +1,46 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, FormEvent } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  FormEvent,
+} from "react";
 
 type Habit = {
   id: number;
   name: string;
-  timeLabel: string;   // "HH:MM"
-  timeMins: number;    // minutes since midnight
-  y: number;           // 0–100, random visual offset
+  timeLabel: string; // "HH:MM"
+  timeMins: number;  // minutes since midnight
+  y: number;         // vertical position 0–100
   completed: boolean;
 };
 
-// Base habits with hardcoded times
-const baseHabits: Omit<Habit, "y" | "completed">[] = [
+type DayData = {
+  id: string; // "YYYY-MM-DD"
+  habits: Habit[];
+};
+
+// ---------- helpers ----------
+
+function getTodayId() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentTimeHHMM() {
+  const now = new Date();
+  const h = now.getHours().toString().padStart(2, "0");
+  const m = now.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+// Base template for NEW days (not hardcoded ones)
+const baseHabitsTemplate = [
   {
     id: 1,
     name: "Drink water",
@@ -39,41 +67,183 @@ const baseHabits: Omit<Habit, "y" | "completed">[] = [
   },
 ];
 
-export default function Home() {
-  const [habits, setHabits] = useState<Habit[]>(() => {
-  // Try loading from storage
-  if (typeof window !== "undefined") {
-    const saved = localStorage.getItem("habits");
-    if (saved) return JSON.parse(saved);
-  }
+// Hardcoded test data so you can see multiple days/tabs immediately
+// Note: y is fixed numbers here, not random
+const testDaysSeed: DayData[] = [
+  {
+    id: "2025-11-14",
+    habits: [
+      {
+        id: 1,
+        name: "Morning stretch",
+        timeLabel: "08:00",
+        timeMins: 8 * 60,
+        y: 30,
+        completed: true,
+      },
+      {
+        id: 2,
+        name: "Read 10 pages",
+        timeLabel: "10:15",
+        timeMins: 10 * 60 + 15,
+        y: 55,
+        completed: true,
+      },
+      {
+        id: 3,
+        name: "Skate practice",
+        timeLabel: "16:30",
+        timeMins: 16 * 60 + 30,
+        y: 70,
+        completed: false,
+      },
+    ],
+  },
+  {
+    id: "2025-11-15",
+    habits: [
+      {
+        id: 1,
+        name: "Hydrate",
+        timeLabel: "09:00",
+        timeMins: 9 * 60,
+        y: 25,
+        completed: true,
+      },
+      {
+        id: 2,
+        name: "Code 30 min",
+        timeLabel: "13:45",
+        timeMins: 13 * 60 + 45,
+        y: 60,
+        completed: true,
+      },
+      {
+        id: 3,
+        name: "Evening walk",
+        timeLabel: "20:10",
+        timeMins: 20 * 60 + 10,
+        y: 45,
+        completed: true,
+      },
+    ],
+  },
+  {
+    id: "2025-11-16",
+    habits: [
+      {
+        id: 1,
+        name: "Journal",
+        timeLabel: "07:30",
+        timeMins: 7 * 60 + 30,
+        y: 40,
+        completed: false,
+      },
+      {
+        id: 2,
+        name: "Stretch 5 min",
+        timeLabel: "12:00",
+        timeMins: 12 * 60,
+        y: 65,
+        completed: false,
+      },
+      {
+        id: 3,
+        name: "Skate clips",
+        timeLabel: "18:20",
+        timeMins: 18 * 60 + 20,
+        y: 35,
+        completed: false,
+      },
+    ],
+  },
+];
 
-  // Otherwise generate them ONCE
-  return baseHabits.map((h) => ({
-    ...h,
-    y: 20 + Math.random() * 60,
-    completed: false,
-  }));
-});
+// For brand-new days only: assign random y once per habit
+function createDay(id: string): DayData {
+  return {
+    id,
+    habits: baseHabitsTemplate.map((h) => ({
+      ...h,
+      y: Math.floor(20 + Math.random() * 60), // random ONCE per habit
+      completed: false,
+    })),
+  };
+}
+
+export default function Home() {
+  // ---------- days + active day ----------
+
+  const [days, setDays] = useState<DayData[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("skateDays");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as DayData[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+    // If nothing saved, start with test data so you can see multiple tabs
+    return testDaysSeed;
+  });
+
+  const [activeDayId, setActiveDayId] = useState<string>(getTodayId);
+
+  // After days load / change, make sure we have an active day
+  useEffect(() => {
+    const todayId = getTodayId();
+    if (days.some((d) => d.id === todayId)) {
+      setActiveDayId(todayId);
+    } else if (days.length > 0) {
+      setActiveDayId(days[0].id);
+    }
+  }, [days]);
+
+  // Ensure today exists as a day (random y assigned only here for new days)
+  useEffect(() => {
+    const todayId = getTodayId();
+    setDays((prev) => {
+      if (prev.some((d) => d.id === todayId)) return prev;
+      return [...prev, createDay(todayId)];
+    });
+  }, []);
+
+  // Persist days whenever they change
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("skateDays", JSON.stringify(days));
+    }
+  }, [days]);
+
+  const activeDay =
+    days.find((d) => d.id === activeDayId) ?? days[0] ?? null;
+  const habits: Habit[] = activeDay?.habits ?? [];
+
+  // ---------- animation + form state ----------
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0); // 0 → 1 across full path
+  const [progress, setProgress] = useState(0); // 0 → 1 along path
 
-  // New habit form state
   const [newName, setNewName] = useState("");
-  const [newTime, setNewTime] = useState("");
+  const [newTime, setNewTime] = useState(""); // empty = use current time
   const [formError, setFormError] = useState("");
 
-  useEffect(() => {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("habits", JSON.stringify(habits));
-  }
-}, [habits]);
-
-  // Simple regex: letters, numbers, spaces, and some basic punctuation.
-  // Blocks angle brackets, slashes, etc. to avoid weird injection-y strings.
+  // Only letters, numbers, spaces, and simple punctuation
   const nameRegex = /^[a-zA-Z0-9\s.,'!?#-]{1,50}$/;
 
-  // Completed habits sorted by time of day → left to right on x axis
+  // Reset animation when switching day
+  useEffect(() => {
+    setIsPlaying(false);
+    setProgress(0);
+  }, [activeDayId]);
+
+  // ---------- derived path for the active day ----------
+
   const completedHabits = habits
     .filter((h) => h.completed)
     .sort((a, b) => a.timeMins - b.timeMins);
@@ -81,12 +251,11 @@ export default function Home() {
   const pathPoints = completedHabits.map(
     (h) =>
       [
-        (h.timeMins / (24 * 60)) * 100, // normalize 0–1440 → 0–100
+        (h.timeMins / (24 * 60)) * 100, // time 0–1440 → x 0–100
         h.y,
       ] as [number, number]
   );
 
-  // Build segments for smooth interpolation
   const { segments, totalLength } = useMemo(() => {
     if (pathPoints.length < 2) {
       return {
@@ -121,12 +290,20 @@ export default function Home() {
     return { segments: segs, totalLength: lengthSum };
   }, [pathPoints]);
 
-  // Toggle habit completion
-  const toggleHabit = (id: number) => {
-    setHabits((prev) =>
-      prev.map((h) =>
-        h.id === id ? { ...h, completed: !h.completed } : h
-      )
+  // ---------- actions ----------
+
+  const toggleHabit = (habitId: number) => {
+    if (!activeDay) return;
+    setDays((prev) =>
+      prev.map((day) => {
+        if (day.id !== activeDay.id) return day;
+        return {
+          ...day,
+          habits: day.habits.map((h) =>
+            h.id === habitId ? { ...h, completed: !h.completed } : h
+          ),
+        };
+      })
     );
   };
 
@@ -142,16 +319,10 @@ export default function Home() {
     setIsPlaying(true);
   };
 
-  function getCurrentTimeHHMM() {
-    const now = new Date();
-    const h = now.getHours().toString().padStart(2, "0");
-    const m = now.getMinutes().toString().padStart(2, "0");
-    return `${h}:${m}`;
-  }
-
-  // Add new habit (with validation)
   const handleAddHabit = (e: FormEvent) => {
     e.preventDefault();
+    if (!activeDay) return;
+
     const trimmed = newName.trim();
 
     if (!trimmed) {
@@ -164,11 +335,12 @@ export default function Home() {
     }
     if (!nameRegex.test(trimmed)) {
       setFormError(
-        "Use only letters, numbers, spaces, and basic punctuation."
+        "Use only letters, numbers, spaces, and simple punctuation."
       );
       return;
     }
-    // If empty time, use current time
+
+    // Time logic: if empty, use current time
     let chosenTime = newTime;
     if (!chosenTime || chosenTime.trim() === "") {
       chosenTime = getCurrentTimeHHMM();
@@ -197,33 +369,43 @@ export default function Home() {
 
     const timeMins = hours * 60 + mins;
 
-    setHabits((prev) => {
-      const nextId = prev.length ? Math.max(...prev.map((h) => h.id)) + 1 : 1;
-      return [
-        ...prev,
-        {
-          id: nextId,
-          name: trimmed,
-          timeLabel: chosenTime,
-          timeMins,
-          y: 20 + Math.random() * 60,
-          completed: false,
-        },
-      ];
-    });
+    setDays((prev) =>
+      prev.map((day) => {
+        if (day.id !== activeDay.id) return day;
+        const nextId =
+          day.habits.length > 0
+            ? Math.max(...day.habits.map((h) => h.id)) + 1
+            : 1;
+        return {
+          ...day,
+          habits: [
+            ...day.habits,
+            {
+              id: nextId,
+              name: trimmed,
+              timeLabel: chosenTime,
+              timeMins,
+              y: Math.floor(20 + Math.random() * 60), // random ONCE for new habit
+              completed: false,
+            },
+          ],
+        };
+      })
+    );
 
     setNewName("");
     setNewTime("");
     setFormError("");
   };
 
-  // Animation
+  // ---------- animation ----------
+
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!isPlaying || totalLength <= 0) return;
 
-    const duration = 4000; // ms for full path
+    const duration = 4000; // ms for full run
     const startTime = performance.now();
 
     const tick = (now: number) => {
@@ -247,7 +429,6 @@ export default function Home() {
     };
   }, [isPlaying, totalLength]);
 
-  // Position of skater based on progress along path
   const skaterPosition = useMemo(() => {
     if (pathPoints.length === 0) return null;
     if (pathPoints.length === 1 || totalLength === 0) {
@@ -274,14 +455,45 @@ export default function Home() {
   const canPlay = pathPoints.length >= 2 && !isPlaying;
   const canReplay = pathPoints.length >= 2 && !isPlaying && progress >= 1;
 
+  const todayId = getTodayId();
+
   return (
     <main className="min-h-screen flex flex-col gap-6 p-4 sm:p-8 bg-slate-950 text-slate-100">
       <h1 className="text-2xl sm:text-3xl font-bold">Skate Your Day 🛹</h1>
 
+      {/* Day tabs */}
+      <section className="flex flex-wrap gap-2 mb-2">
+        {days
+          .slice()
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .map((day) => {
+            const isActive = day.id === activeDayId;
+            const isToday = day.id === todayId;
+            return (
+              <button
+                key={day.id}
+                onClick={() => setActiveDayId(day.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                  isActive
+                    ? "bg-emerald-500 text-emerald-950 border-transparent"
+                    : "bg-slate-900 text-slate-200 border-slate-700"
+                }`}
+              >
+                {day.id}
+                {isToday && (
+                  <span className="ml-1 text-[0.6rem] uppercase">
+                    (Today)
+                  </span>
+                )}
+              </button>
+            );
+          })}
+      </section>
+
       {/* Add habit form */}
       <section className="max-w-xl space-y-2">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
-          Add a habit
+          Add a habit for {activeDay?.id ?? "…"}
         </h2>
         <form
           onSubmit={handleAddHabit}
@@ -300,10 +512,13 @@ export default function Home() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-slate-400">Time</label>
+            <label className="text-xs text-slate-400">
+              Time (blank = now)
+            </label>
             <input
               type="time"
               value={newTime}
+              placeholder="09:00"
               onChange={(e) => setNewTime(e.target.value)}
               className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/70"
             />
@@ -326,7 +541,7 @@ export default function Home() {
       {/* Habit list */}
       <section className="flex flex-col gap-2 max-w-xl">
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
-          Today&apos;s habits
+          Habits on {activeDay?.id ?? "…"}
         </h2>
         {habits
           .slice()
@@ -381,14 +596,14 @@ export default function Home() {
         </button>
 
         <span className="text-xs text-slate-400">
-          Complete at least 2 habits to skate a timeline of your day.
+          Each tab is a separate day with its own skate line.
         </span>
       </div>
 
-      {/* Skatepark timeline map */}
+      {/* Timeline / skate map */}
       <div className="mt-2 w-full max-w-3xl aspect-[3/1] sm:aspect-[16/5] rounded-2xl p-3 bg-slate-950 border border-slate-700/70 bg-[radial-gradient(circle_at_top_left,#22c55e22,transparent_60%),radial-gradient(circle_at_bottom_right,#3b82f622,transparent_60%)]">
         <svg viewBox="0 0 100 100" className="w-full h-full">
-          {/* time axis grid */}
+          {/* time grid */}
           {[0, 25, 50, 75, 100].map((x) => (
             <g key={x}>
               <line
@@ -402,7 +617,7 @@ export default function Home() {
             </g>
           ))}
 
-          {/* labels for time (approx) */}
+          {/* time labels */}
           <text
             x={0}
             y={98}
@@ -461,14 +676,13 @@ export default function Home() {
             const x = (h.timeMins / (24 * 60)) * 100;
             const y = h.y;
             return (
-              <g key={h.id}>
-                <circle
-                  cx={x}
-                  cy={y}
-                  r={h.completed ? 3.5 : 2.5}
-                  fill={h.completed ? "#22c55e" : "rgba(148,163,184,0.8)"}
-                />
-              </g>
+              <circle
+                key={h.id}
+                cx={x}
+                cy={y}
+                r={h.completed ? 3.5 : 2.5}
+                fill={h.completed ? "#22c55e" : "rgba(148,163,184,0.8)"}
+              />
             );
           })}
 
