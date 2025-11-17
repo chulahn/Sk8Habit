@@ -187,15 +187,18 @@ function HomeContent() {
 
   const [activeDayId, setActiveDayId] = useState<string>(getTodayId);
 
-  // After days load / change, make sure we have an active day
+  // After days load / change, make sure we have an active day (but don't force switch)
   useEffect(() => {
     const todayId = getTodayId();
-    if (days.some((d) => d.id === todayId)) {
-      setActiveDayId(todayId);
-    } else if (days.length > 0) {
-      setActiveDayId(days[0].id);
+    // Only auto-set active day if it no longer exists
+    if (!days.some((d) => d.id === activeDayId)) {
+      if (days.some((d) => d.id === todayId)) {
+        setActiveDayId(todayId);
+      } else if (days.length > 0) {
+        setActiveDayId(days[0].id);
+      }
     }
-  }, [days]);
+  }, [days, activeDayId]);
 
   // Ensure today exists as a day (random y assigned only here for new days)
   useEffect(() => {
@@ -391,6 +394,23 @@ function HomeContent() {
     setFormError("");
   };
 
+  const handleReset = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("skateDays");
+    }
+    const todayId = getTodayId();
+    const daysWithToday = testDaysSeed.some((d) => d.id === todayId)
+      ? testDaysSeed
+      : [...testDaysSeed, createDay(todayId)];
+    setDays(daysWithToday);
+    setActiveDayId(todayId);
+    setNewName("");
+    setNewTime("");
+    setFormError("");
+    setIsPlaying(false);
+    setProgress(0);
+  };
+
   // ---------- animation ----------
 
   const animationRef = useRef<number | null>(null);
@@ -468,7 +488,7 @@ function HomeContent() {
 
       <HabitList habits={habits} toggleHabit={toggleHabit} />
 
-      <Controls handlePlay={handlePlay} handleReplay={handleReplay} canPlay={canPlay} canReplay={canReplay} />
+      <Controls handlePlay={handlePlay} handleReplay={handleReplay} canPlay={canPlay} canReplay={canReplay} handleReset={handleReset} />
 
       <Timeline habits={habits} pathPoints={pathPoints} skaterPosition={skaterPosition} />
     </main>
