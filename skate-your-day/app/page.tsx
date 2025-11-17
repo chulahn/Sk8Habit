@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 
 const initialHabits = [
   { id: 1, name: "Drink water", x: 20, y: 80 },
@@ -19,14 +19,41 @@ export default function Home() {
   );
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
+  // 0 -> 1 across the entire path
+  const [progress, setProgress] = useState(0);
 
+  // Completed habits in the order finished
   const completedHabits = habits
     .filter((h) => h.completed && h.completedAt != null)
     .sort((a, b) => (a.completedAt! - b.completedAt!));
 
-  const pathPoints = completedHabits.map((h) => [h.x, h.y]);
+  const pathPoints = completedHabits.map((h) => [h.x, h.y] as [number, number]);
 
+  // Prepare segments + total length for smooth interpolation
+  const { segments, totalLength } = useMemo(() => {
+    if (pathPoints.length < 2) {
+      return { segments: [] as { from: [number, number]; to: [number, number]; length: number }[], totalLength: 0 };
+    }
+
+    const segs: { from: [number, number]; to: [number, number]; length: number }[] = [];
+    let lengthSum = 0;
+
+    for (let i = 0; i < pathPoints.length - 1; i++) {
+      const from = pathPoints[i];
+      const to = pathPoints[i + 1];
+      const dx = to[0] - from[0];
+      const dy = to[1] - from[1];
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0) {
+        segs.push({ from, to, length: len });
+        lengthSum += len;
+      }
+    }
+
+    return { segments: segs, totalLength: lengthSum };
+  }, [pathPoints]);
+
+  // Toggle habit completion
   const toggleHabit = (id: number) => {
     setHabits((prev) =>
       prev.map((h) => {
@@ -50,40 +77,67 @@ export default function Home() {
 
   const handlePlay = () => {
     if (pathPoints.length < 2) return;
-    setCurrentStep(0);
+    setProgress(0);
     setIsPlaying(true);
   };
 
+  // Animation using requestAnimationFrame
+  const animationRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (!isPlaying) return;
-    if (pathPoints.length === 0) {
-      setIsPlaying(false);
-      return;
+    if (!isPlaying || totalLength <= 0) return;
+
+    const duration = 4000; // ms for full path
+    const startTime = performance.now();
+
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const nextProgress = Math.min(elapsed / duration, 1);
+      setProgress(nextProgress);
+
+      if (nextProgress < 1) {
+        animationRef.current = requestAnimationFrame(tick);
+      } else {
+        setIsPlaying(false);
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (animationRef.current != null) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [isPlaying, totalLength]);
+
+  // Compute skater position from progress along the entire path
+  const skaterPosition = useMemo(() => {
+    if (pathPoints.length === 0) return null;
+    if (pathPoints.length === 1 || totalLength === 0) {
+      return pathPoints[0];
     }
 
-    const interval = setInterval(() => {
-      setCurrentStep((prev) => {
-        const next = prev + 1;
-        if (next >= pathPoints.length) {
-          clearInterval(interval);
-          return prev;
-        }
-        return next;
-      });
-    }, 700);
+    let distanceAlong = progress * totalLength;
 
-    return () => clearInterval(interval);
-  }, [isPlaying, pathPoints.length]);
+    for (const seg of segments) {
+      if (distanceAlong <= seg.length) {
+        const t = distanceAlong / seg.length; // 0 -> 1 within this segment
+        const x = seg.from[0] + (seg.to[0] - seg.from[0]) * t;
+        const y = seg.from[1] + (seg.to[1] - seg.from[1]) * t;
+        return [x, y] as [number, number];
+      } else {
+        distanceAlong -= seg.length;
+      }
+    }
 
-  const skaterPosition =
-    pathPoints.length > 0
-      ? pathPoints[Math.min(currentStep, pathPoints.length - 1)]
-      : null;
+    // Fallback: end of last segment
+    const last = segments[segments.length - 1];
+    return last ? last.to : pathPoints[pathPoints.length - 1];
+  }, [pathPoints, segments, totalLength, progress]);
 
   return (
-    <main
-      className="min-h-screen flex flex-col gap-4 p-4 sm:p-8 bg-slate-950 text-slate-100"
-    >
+    <main className="min-h-screen flex flex-col gap-4 p-4 sm:p-8 bg-slate-950 text-slate-100">
       <h1 className="text-2xl sm:text-3xl font-bold">Skate Your Day 🛹</h1>
 
       {/* Habit list */}
@@ -161,7 +215,7 @@ export default function Home() {
             />
           )}
 
-          {/* habits */}
+          {/* habit nodes */}
           {habits.map((h) => (
             <circle
               key={h.id}
@@ -172,7 +226,7 @@ export default function Home() {
             />
           ))}
 
-          {/* skater */}
+          {/* skater dot */}
           {skaterPosition && (
             <circle
               cx={skaterPosition[0]}
