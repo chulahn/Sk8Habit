@@ -19,23 +19,31 @@ export default function Home() {
   );
 
   const [isPlaying, setIsPlaying] = useState(false);
-  // 0 -> 1 across the entire path
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(0); // 0 -> 1
 
-  // Completed habits in the order finished
   const completedHabits = habits
     .filter((h) => h.completed && h.completedAt != null)
     .sort((a, b) => (a.completedAt! - b.completedAt!));
 
   const pathPoints = completedHabits.map((h) => [h.x, h.y] as [number, number]);
 
-  // Prepare segments + total length for smooth interpolation
   const { segments, totalLength } = useMemo(() => {
     if (pathPoints.length < 2) {
-      return { segments: [] as { from: [number, number]; to: [number, number]; length: number }[], totalLength: 0 };
+      return {
+        segments: [] as {
+          from: [number, number];
+          to: [number, number];
+          length: number;
+        }[],
+        totalLength: 0,
+      };
     }
 
-    const segs: { from: [number, number]; to: [number, number]; length: number }[] = [];
+    const segs: {
+      from: [number, number];
+      to: [number, number];
+      length: number;
+    }[] = [];
     let lengthSum = 0;
 
     for (let i = 0; i < pathPoints.length - 1; i++) {
@@ -53,7 +61,6 @@ export default function Home() {
     return { segments: segs, totalLength: lengthSum };
   }, [pathPoints]);
 
-  // Toggle habit completion
   const toggleHabit = (id: number) => {
     setHabits((prev) =>
       prev.map((h) => {
@@ -73,6 +80,7 @@ export default function Home() {
         }
       })
     );
+    // if you change the path while playing, you *could* reset, but we'll skip for now
   };
 
   const handlePlay = () => {
@@ -81,13 +89,19 @@ export default function Home() {
     setIsPlaying(true);
   };
 
-  // Animation using requestAnimationFrame
+  const handleReplay = () => {
+    if (pathPoints.length < 2) return;
+    setProgress(0);
+    setIsPlaying(true);
+  };
+
+  // Animation
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!isPlaying || totalLength <= 0) return;
 
-    const duration = 4000; // ms for full path
+    const duration = 4000; // ms for full run
     const startTime = performance.now();
 
     const tick = (now: number) => {
@@ -111,7 +125,6 @@ export default function Home() {
     };
   }, [isPlaying, totalLength]);
 
-  // Compute skater position from progress along the entire path
   const skaterPosition = useMemo(() => {
     if (pathPoints.length === 0) return null;
     if (pathPoints.length === 1 || totalLength === 0) {
@@ -122,7 +135,7 @@ export default function Home() {
 
     for (const seg of segments) {
       if (distanceAlong <= seg.length) {
-        const t = distanceAlong / seg.length; // 0 -> 1 within this segment
+        const t = distanceAlong / seg.length;
         const x = seg.from[0] + (seg.to[0] - seg.from[0]) * t;
         const y = seg.from[1] + (seg.to[1] - seg.from[1]) * t;
         return [x, y] as [number, number];
@@ -131,10 +144,12 @@ export default function Home() {
       }
     }
 
-    // Fallback: end of last segment
     const last = segments[segments.length - 1];
     return last ? last.to : pathPoints[pathPoints.length - 1];
   }, [pathPoints, segments, totalLength, progress]);
+
+  const canPlay = pathPoints.length >= 2 && !isPlaying;
+  const canReplay = pathPoints.length >= 2 && !isPlaying && progress >= 1;
 
   return (
     <main className="min-h-screen flex flex-col gap-4 p-4 sm:p-8 bg-slate-950 text-slate-100">
@@ -161,20 +176,33 @@ export default function Home() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-2 mt-2">
+      <div className="flex items-center gap-2 mt-2 flex-wrap">
         <button
           onClick={handlePlay}
-          disabled={pathPoints.length < 2}
+          disabled={!canPlay}
           className={`px-4 py-2 rounded-full font-semibold text-sm ${
-            pathPoints.length < 2
+            !canPlay
               ? "bg-slate-600/60 text-slate-900 cursor-not-allowed"
               : "bg-gradient-to-r from-blue-500 to-cyan-400 text-slate-900"
           }`}
         >
           ▶ Play Day
         </button>
+
+        <button
+          onClick={handleReplay}
+          disabled={!canReplay}
+          className={`px-4 py-2 rounded-full font-semibold text-sm ${
+            !canReplay
+              ? "bg-slate-700/60 text-slate-400 cursor-not-allowed"
+              : "bg-gradient-to-r from-fuchsia-500 to-pink-400 text-slate-900"
+          }`}
+        >
+          ↺ Replay
+        </button>
+
         <span className="text-xs text-slate-400">
-          Complete at least 2 habits to skate through your day.
+          Complete at least 2 habits, then play & replay your day.
         </span>
       </div>
 
@@ -226,7 +254,7 @@ export default function Home() {
             />
           ))}
 
-          {/* skater dot */}
+          {/* skater */}
           {skaterPosition && (
             <circle
               cx={skaterPosition[0]}
