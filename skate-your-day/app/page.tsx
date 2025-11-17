@@ -60,7 +60,7 @@ export default function Home() {
 
   // New habit form state
   const [newName, setNewName] = useState("");
-  const [newTime, setNewTime] = useState("09:00");
+  const [newTime, setNewTime] = useState("");
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -142,6 +142,13 @@ export default function Home() {
     setIsPlaying(true);
   };
 
+  function getCurrentTimeHHMM() {
+    const now = new Date();
+    const h = now.getHours().toString().padStart(2, "0");
+    const m = now.getMinutes().toString().padStart(2, "0");
+    return `${h}:${m}`;
+  }
+
   // Add new habit (with validation)
   const handleAddHabit = (e: FormEvent) => {
     e.preventDefault();
@@ -161,14 +168,21 @@ export default function Home() {
       );
       return;
     }
-    if (!/^\d{2}:\d{2}$/.test(newTime)) {
+    // If empty time, use current time
+    let chosenTime = newTime;
+    if (!chosenTime || chosenTime.trim() === "") {
+      chosenTime = getCurrentTimeHHMM();
+    }
+
+    if (!/^\d{2}:\d{2}$/.test(chosenTime)) {
       setFormError("Please choose a valid time.");
       return;
     }
 
-    const [hStr, mStr] = newTime.split(":");
+    const [hStr, mStr] = chosenTime.split(":");
     const hours = Number(hStr);
     const mins = Number(mStr);
+
     if (
       Number.isNaN(hours) ||
       Number.isNaN(mins) ||
@@ -190,7 +204,7 @@ export default function Home() {
         {
           id: nextId,
           name: trimmed,
-          timeLabel: newTime,
+          timeLabel: chosenTime,
           timeMins,
           y: 20 + Math.random() * 60,
           completed: false,
@@ -199,7 +213,7 @@ export default function Home() {
     });
 
     setNewName("");
-    setNewTime("09:00");
+    setNewTime("");
     setFormError("");
   };
 
