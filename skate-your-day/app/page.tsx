@@ -410,6 +410,83 @@ function HomeContent() {
     setIsPlaying(false);
     setProgress(0);
   };
+  // Export JSON text for the active day and toggle visibility of the textbox
+  const [exportJson, setExportJson] = useState("");
+  const [showExportJson, setShowExportJson] = useState(false);
+
+  const toggleExportJson = () => {
+    if (!activeDay) {
+      alert("No active day to export.");
+      return;
+    }
+
+    // If toggling on, prepare JSON
+    if (!showExportJson) {
+      try {
+        const json = JSON.stringify(activeDay, null, 2);
+        setExportJson(json);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to produce export JSON.");
+        return;
+      }
+    }
+
+    setShowExportJson((v) => !v);
+  };
+
+  // hide export JSON view when switching active day
+  useEffect(() => {
+    setShowExportJson(false);
+  }, [activeDayId]);
+
+  // Import handler that accepts a parsed JSON object (DayData or array)
+  const handleImportObject = (parsed: any) => {
+    if (!parsed) {
+      alert("No JSON provided for import.");
+      return;
+    }
+
+    const toUpsert: any[] = Array.isArray(parsed) ? parsed : [parsed];
+
+    const validDays = toUpsert.filter((d) => {
+      if (!d || typeof d !== "object") return false;
+      if (typeof d.id !== "string") return false;
+      if (!Array.isArray(d.habits)) return false;
+      return true;
+    });
+
+    if (validDays.length === 0) {
+      alert("Imported JSON did not contain valid day data.");
+      return;
+    }
+
+    setDays((prev) => {
+      const copy = [...prev];
+      for (const d of validDays) {
+        const existingIndex = copy.findIndex((x) => x.id === d.id);
+        const normalizedHabits = (d.habits || []).map((h: any) => ({
+          id: Number(h.id) || 0,
+          name: String(h.name || ""),
+          timeLabel: String(h.timeLabel || "00:00"),
+          timeMins: Number(h.timeMins) || 0,
+          y: Number(h.y) || 50,
+          completed: Boolean(h.completed),
+        }));
+
+        const dayObj = { id: d.id, habits: normalizedHabits };
+
+        if (existingIndex >= 0) {
+          copy[existingIndex] = dayObj;
+        } else {
+          copy.push(dayObj);
+        }
+      }
+      return copy;
+    });
+
+    alert("Import successful.");
+  };
 
   // ---------- animation ----------
 
@@ -488,7 +565,17 @@ function HomeContent() {
 
       <HabitList habits={habits} toggleHabit={toggleHabit} />
 
-      <Controls handlePlay={handlePlay} handleReplay={handleReplay} canPlay={canPlay} canReplay={canReplay} handleReset={handleReset} />
+      <Controls
+        handlePlay={handlePlay}
+        handleReplay={handleReplay}
+        canPlay={canPlay}
+        canReplay={canReplay}
+        handleReset={handleReset}
+        exportJson={exportJson}
+        showExportJson={showExportJson}
+        toggleExportJson={toggleExportJson}
+        handleImportObject={handleImportObject}
+      />
 
       <Timeline habits={habits} pathPoints={pathPoints} skaterPosition={skaterPosition} />
     </main>
