@@ -2,9 +2,11 @@
 
 import React from "react";
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function Header() {
   const { data: session, status } = useSession();
+  const router = useRouter();
 
   const loggedIn = status === "authenticated" && session?.user;
   const [statusInfo, setStatusInfo] = React.useState<{
@@ -26,6 +28,11 @@ export default function Header() {
       mounted = false;
     };
   }, []);
+
+  const handleSignOut = async () => {
+    await signOut({ redirect: false });
+    router.push("/");
+  };
 
   return (
     <div className={`fixed top-0 left-0 right-0 z-50 pointer-events-none`}> 
@@ -61,7 +68,7 @@ export default function Header() {
         <div className="flex-shrink-0">
           {loggedIn ? (
             <button
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={handleSignOut}
               className="px-2 py-0.5 rounded bg-slate-800 text-slate-100 text-xs whitespace-nowrap"
             >
               Sign out

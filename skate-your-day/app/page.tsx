@@ -232,23 +232,35 @@ function HomeContent() {
 
   // When user signs in, fetch their days from server and replace local state
   useEffect(() => {
-    if (sessionStatus !== "authenticated") return;
-
-    (async () => {
-      try {
-        const res = await fetch("/api/days");
-        if (!res.ok) return;
-        const serverDays = (await res.json()) as DayData[];
-        if (Array.isArray(serverDays) && serverDays.length > 0) {
-          syncingFromServerRef.current = true;
-          setDays(serverDays as DayData[]);
-          // allow next tick before enabling pushes
-          setTimeout(() => (syncingFromServerRef.current = false), 0);
+    if (sessionStatus === "authenticated") {
+      // User signed in: fetch server days
+      (async () => {
+        try {
+          const res = await fetch("/api/days");
+          if (!res.ok) return;
+          const serverDays = (await res.json()) as DayData[];
+          if (Array.isArray(serverDays) && serverDays.length > 0) {
+            syncingFromServerRef.current = true;
+            setDays(serverDays as DayData[]);
+            // allow next tick before enabling pushes
+            setTimeout(() => (syncingFromServerRef.current = false), 0);
+          }
+        } catch (e) {
+          console.error("Failed to fetch server days", e);
         }
-      } catch (e) {
-        console.error("Failed to fetch server days", e);
+      })();
+    } else if (sessionStatus === "unauthenticated") {
+      // User signed out: reset to default test data
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("skateDays");
       }
-    })();
+      const todayId = getTodayId();
+      const daysWithToday = testDaysSeed.some((d) => d.id === todayId)
+        ? testDaysSeed
+        : [...testDaysSeed, createDay(todayId)];
+      setDays(daysWithToday);
+      setActiveDayId(todayId);
+    }
   }, [sessionStatus]);
 
   const activeDay =
