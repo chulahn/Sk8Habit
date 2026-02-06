@@ -17,7 +17,7 @@ export default function DayTabs({
   todayId,
 }: Props) {
   return (
-    <section className="flex flex-wrap gap-2 mb-2">
+    <section className="flex flex-wrap gap-2 mb-4 sm:mb-2">
       {days
         .slice()
         .sort((a, b) => a.id.localeCompare(b.id))
@@ -28,10 +28,10 @@ export default function DayTabs({
             <button
               key={day.id}
               onClick={() => setActiveDayId(day.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+              className={`px-3 sm:px-3 py-2 sm:py-1.5 rounded-full text-sm sm:text-xs font-semibold border transition-all ${
                 isActive
                   ? "bg-emerald-500 text-emerald-950 border-transparent"
-                  : "bg-slate-900 text-slate-200 border-slate-700"
+                  : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
               }`}
             >
               {day.id}

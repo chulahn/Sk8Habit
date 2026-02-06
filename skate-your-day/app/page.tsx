@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import type { Habit, DayData, Point } from "./components/types";
+import { useSession } from "next-auth/react";
 import DayTabs from "./components/DayTabs";
 import AddHabitForm from "./components/AddHabitForm";
 import HabitList from "./components/HabitList";
@@ -186,6 +187,8 @@ function HomeContent() {
   });
 
   const [activeDayId, setActiveDayId] = useState<string>(getTodayId);
+  const { data: session, status: sessionStatus } = useSession();
+  const syncingFromServerRef = useRef(false);
 
   // After days load / change, make sure we have an active day (but don't force switch)
   useEffect(() => {
@@ -214,7 +217,39 @@ function HomeContent() {
     if (typeof window !== "undefined") {
       localStorage.setItem("skateDays", JSON.stringify(days));
     }
-  }, [days]);
+    // if logged in and not currently syncing from server, push to server
+    if (sessionStatus === "authenticated" && !syncingFromServerRef.current) {
+      // fire-and-forget
+      fetch("/api/days", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(days),
+      }).catch((e) => {
+        console.error("Failed to sync days to server", e);
+      });
+    }
+  }, [days, sessionStatus]);
+
+  // When user signs in, fetch their days from server and replace local state
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/days");
+        if (!res.ok) return;
+        const serverDays = (await res.json()) as DayData[];
+        if (Array.isArray(serverDays) && serverDays.length > 0) {
+          syncingFromServerRef.current = true;
+          setDays(serverDays as DayData[]);
+          // allow next tick before enabling pushes
+          setTimeout(() => (syncingFromServerRef.current = false), 0);
+        }
+      } catch (e) {
+        console.error("Failed to fetch server days", e);
+      }
+    })();
+  }, [sessionStatus]);
 
   const activeDay =
     days.find((d) => d.id === activeDayId) ?? days[0] ?? null;
