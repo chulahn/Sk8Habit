@@ -414,6 +414,10 @@ function HomeContent() {
   const [exportJson, setExportJson] = useState("");
   const [showExportJson, setShowExportJson] = useState(false);
 
+  // Export/import for all days (current user)
+  const [exportAllJson, setExportAllJson] = useState("");
+  const [showExportAllJson, setShowExportAllJson] = useState(false);
+
   const toggleExportJson = () => {
     if (!activeDay) {
       alert("No active day to export.");
@@ -433,6 +437,19 @@ function HomeContent() {
     }
 
     setShowExportJson((v) => !v);
+  };
+
+  const toggleExportAllJson = () => {
+    try {
+      const json = JSON.stringify(days, null, 2);
+      setExportAllJson(json);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to produce export JSON for all days.");
+      return;
+    }
+
+    setShowExportAllJson((v) => !v);
   };
 
   // hide export JSON view when switching active day
@@ -486,6 +503,11 @@ function HomeContent() {
     });
 
     alert("Import successful.");
+  };
+
+  // wrapper for importing all-days JSON (delegates to same validation/upsert)
+  const handleImportAllObject = (parsed: any) => {
+    handleImportObject(parsed);
   };
 
   // ---------- animation ----------
@@ -574,6 +596,10 @@ function HomeContent() {
         exportJson={exportJson}
         showExportJson={showExportJson}
         toggleExportJson={toggleExportJson}
+        exportAllJson={exportAllJson}
+        showExportAllJson={showExportAllJson}
+        toggleExportAllJson={toggleExportAllJson}
+        handleImportAllObject={handleImportAllObject}
         handleImportObject={handleImportObject}
       />
 
