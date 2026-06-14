@@ -8,12 +8,29 @@ datasource db {
 }
 
 model User {
+  id                  Int                  @id @default(autoincrement())
+  name                String?
+  email               String               @unique
+  password            String
+  createdAt           DateTime             @default(now())
+  days                Day[]
+  loginHistory        LoginHistory[]
+  failedLoginAttempts FailedLoginAttempt[]
+}
+
+model LoginHistory {
+  id      Int      @id @default(autoincrement())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int
+  loginAt DateTime @default(now())
+}
+
+model FailedLoginAttempt {
   id        Int      @id @default(autoincrement())
-  name      String?
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  days      Day[]
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  email     String
+  attemptAt DateTime @default(now())
 }
 
 model Day {

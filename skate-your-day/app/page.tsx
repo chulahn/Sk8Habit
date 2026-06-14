@@ -8,13 +8,22 @@ import {
   FormEvent,
 } from "react";
 
-import type { Habit, DayData, Point } from "./components/types";
+import type {
+  Habit,
+  DayData,
+  Friend,
+  ProgressProfile,
+  ShopItem,
+} from "./components/types";
 import { useSession } from "next-auth/react";
 import DayTabs from "./components/DayTabs";
 import AddHabitForm from "./components/AddHabitForm";
 import HabitList from "./components/HabitList";
 import Controls from "./components/Controls";
 import Timeline from "./components/Timeline";
+import ProgressPanel from "./components/ProgressPanel";
+import SocialPanel from "./components/SocialPanel";
+import ShopPanel from "./components/ShopPanel";
 
 // ---------- helpers ----------
 
@@ -60,6 +69,48 @@ const baseHabitsTemplate = [
     timeMins: 21 * 60 + 15,
   },
 ];
+
+const shopItems: ShopItem[] = [
+  {
+    id: "deck-sticker",
+    name: "Deck Sticker",
+    description: "Mark your setup with a starter reward.",
+    cost: 60,
+  },
+  {
+    id: "fresh-wheels",
+    name: "Fresh Wheels",
+    description: "A cosmetic upgrade for consistent habit runs.",
+    cost: 140,
+  },
+  {
+    id: "night-session",
+    name: "Night Session",
+    description: "Unlock a late-session badge for your profile.",
+    cost: 220,
+  },
+  {
+    id: "pro-line",
+    name: "Pro Line",
+    description: "A top-tier badge for long-term progress.",
+    cost: 360,
+  },
+];
+
+const defaultFriends: Friend[] = [
+  { id: 1, name: "Maya", points: 180 },
+  { id: 2, name: "Jordan", points: 130 },
+  { id: 3, name: "Riley", points: 90 },
+];
+
+function createDefaultProfile(todayId: string): ProgressProfile {
+  return {
+    displayName: "You",
+    friends: defaultFriends,
+    purchases: [],
+    appUseDates: [todayId],
+  };
+}
 
 // Hardcoded test data so you can see multiple days/tabs immediately
 // Note: y is fixed numbers here, not random
@@ -165,6 +216,25 @@ function createDay(id: string): DayData {
   };
 }
 
+function getConsecutiveDayCount(dates: string[], todayId: string) {
+  const dateSet = new Set(dates);
+  const cursor = new Date(`${todayId}T12:00:00`);
+  let streak = 0;
+
+  while (true) {
+    const year = cursor.getFullYear();
+    const month = String(cursor.getMonth() + 1).padStart(2, "0");
+    const day = String(cursor.getDate()).padStart(2, "0");
+    const id = `${year}-${month}-${day}`;
+
+    if (!dateSet.has(id)) break;
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
 function HomeContent() {
   // ---------- days + active day ----------
 
@@ -184,6 +254,42 @@ function HomeContent() {
     }
     // If nothing saved, start with test data so you can see multiple tabs
     return testDaysSeed;
+  });
+
+  const [profile, setProfile] = useState<ProgressProfile>(() => {
+    const todayId = getTodayId();
+
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("skateProgressProfile");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as Partial<ProgressProfile>;
+          return {
+            displayName:
+              typeof parsed.displayName === "string"
+                ? parsed.displayName
+                : "You",
+            friends: Array.isArray(parsed.friends)
+              ? parsed.friends.map((friend, index) => ({
+                  id: Number(friend.id) || index + 1,
+                  name: String(friend.name || "Friend"),
+                  points: Math.max(0, Number(friend.points) || 0),
+                }))
+              : defaultFriends,
+            purchases: Array.isArray(parsed.purchases)
+              ? parsed.purchases.map(String)
+              : [],
+            appUseDates: Array.isArray(parsed.appUseDates)
+              ? Array.from(new Set([...parsed.appUseDates.map(String), todayId]))
+              : [todayId],
+          };
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    return createDefaultProfile(todayId);
   });
 
   const [activeDayId, setActiveDayId] = useState<string>(getTodayId);
@@ -230,6 +336,12 @@ function HomeContent() {
     }
   }, [days, sessionStatus]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("skateProgressProfile", JSON.stringify(profile));
+    }
+  }, [profile]);
+
   // When user signs in, fetch their days from server and replace local state
   useEffect(() => {
     if (sessionStatus === "authenticated") {
@@ -267,6 +379,35 @@ function HomeContent() {
     days.find((d) => d.id === activeDayId) ?? days[0] ?? null;
   const habits: Habit[] = activeDay?.habits ?? [];
 
+  const completedCount = days.reduce(
+    (total, day) =>
+      total + day.habits.filter((habit) => habit.completed).length,
+    0
+  );
+  const earnedPoints = completedCount * 10 + profile.appUseDates.length * 25;
+  const spentPoints = shopItems
+    .filter((item) => profile.purchases.includes(item.id))
+    .reduce((total, item) => total + item.cost, 0);
+  const points = Math.max(0, earnedPoints - spentPoints);
+  const streak = getConsecutiveDayCount(profile.appUseDates, getTodayId());
+  const currentUserName =
+    sessionStatus === "authenticated"
+      ? session?.user?.name || session?.user?.email || profile.displayName
+      : profile.displayName;
+  const leaderboard = [
+    {
+      id: "you",
+      name: currentUserName,
+      points: earnedPoints,
+      isYou: true,
+    },
+    ...profile.friends.map((friend) => ({
+      id: `friend-${friend.id}`,
+      name: friend.name,
+      points: friend.points,
+    })),
+  ].sort((a, b) => b.points - a.points);
+
   // ---------- animation + form state ----------
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -275,6 +416,8 @@ function HomeContent() {
   const [newName, setNewName] = useState("");
   const [newTime, setNewTime] = useState(""); // empty = use current time
   const [formError, setFormError] = useState("");
+  const [friendName, setFriendName] = useState("");
+  const [friendPoints, setFriendPoints] = useState("");
 
   // Only letters, numbers, spaces, and simple punctuation
   const nameRegex = /^[a-zA-Z0-9\s.,'!?#-]{1,50}$/;
@@ -441,18 +584,79 @@ function HomeContent() {
     setFormError("");
   };
 
+  const handleAddFriend = (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = friendName.trim();
+    const parsedPoints = Number(friendPoints);
+
+    if (!trimmed) {
+      alert("Enter a friend name.");
+      return;
+    }
+
+    if (!Number.isFinite(parsedPoints) || parsedPoints < 0) {
+      alert("Enter a valid point total.");
+      return;
+    }
+
+    setProfile((prev) => {
+      const nextId =
+        prev.friends.length > 0
+          ? Math.max(...prev.friends.map((friend) => friend.id)) + 1
+          : 1;
+
+      return {
+        ...prev,
+        friends: [
+          ...prev.friends,
+          {
+            id: nextId,
+            name: trimmed.slice(0, 32),
+            points: Math.round(parsedPoints),
+          },
+        ],
+      };
+    });
+    setFriendName("");
+    setFriendPoints("");
+  };
+
+  const handleRemoveFriend = (friendId: number) => {
+    setProfile((prev) => ({
+      ...prev,
+      friends: prev.friends.filter((friend) => friend.id !== friendId),
+    }));
+  };
+
+  const handleBuyItem = (item: ShopItem) => {
+    if (profile.purchases.includes(item.id)) return;
+    if (points < item.cost) {
+      alert("Not enough points yet.");
+      return;
+    }
+
+    setProfile((prev) => ({
+      ...prev,
+      purchases: [...prev.purchases, item.id],
+    }));
+  };
+
   const handleReset = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("skateDays");
+      localStorage.removeItem("skateProgressProfile");
     }
     const todayId = getTodayId();
     const daysWithToday = testDaysSeed.some((d) => d.id === todayId)
       ? testDaysSeed
       : [...testDaysSeed, createDay(todayId)];
     setDays(daysWithToday);
+    setProfile(createDefaultProfile(todayId));
     setActiveDayId(todayId);
     setNewName("");
     setNewTime("");
+    setFriendName("");
+    setFriendPoints("");
     setFormError("");
     setIsPlaying(false);
     setProgress(0);
@@ -617,40 +821,86 @@ function HomeContent() {
   const todayId = getTodayId();
 
   return (
-    <main className="min-h-screen flex flex-col gap-6 p-4 sm:p-8 bg-slate-950 text-slate-100">
-      <h1 className="text-2xl sm:text-3xl font-bold">Skate Your Day 🛹</h1>
+    <main className="min-h-screen bg-slate-950 p-4 text-slate-100 sm:p-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <header className="flex flex-col gap-3 pt-10 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold sm:text-3xl">Skate Your Day</h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Complete habits, earn points, climb the leaderboard, and spend
+              rewards in the shop.
+            </p>
+          </div>
+          <div className="rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-right">
+            <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200">
+              Current balance
+            </p>
+            <p className="text-2xl font-bold text-cyan-100">{points} pts</p>
+          </div>
+        </header>
 
-      <DayTabs days={days} activeDayId={activeDayId} setActiveDayId={setActiveDayId} todayId={todayId} />
+        <ProgressPanel
+          points={points}
+          earnedPoints={earnedPoints}
+          completedCount={completedCount}
+          streak={streak}
+          purchasedCount={profile.purchases.length}
+        />
 
-      <AddHabitForm
-        activeDayId={activeDay?.id}
-        newName={newName}
-        setNewName={setNewName}
-        newTime={newTime}
-        setNewTime={setNewTime}
-        formError={formError}
-        handleAddHabit={handleAddHabit}
-      />
+        <DayTabs days={days} activeDayId={activeDayId} setActiveDayId={setActiveDayId} todayId={todayId} />
 
-      <HabitList habits={habits} toggleHabit={toggleHabit} />
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
+          <div className="flex flex-col gap-6">
+            <AddHabitForm
+              activeDayId={activeDay?.id}
+              newName={newName}
+              setNewName={setNewName}
+              newTime={newTime}
+              setNewTime={setNewTime}
+              formError={formError}
+              handleAddHabit={handleAddHabit}
+            />
 
-      <Controls
-        handlePlay={handlePlay}
-        handleReplay={handleReplay}
-        canPlay={canPlay}
-        canReplay={canReplay}
-        handleReset={handleReset}
-        exportJson={exportJson}
-        showExportJson={showExportJson}
-        toggleExportJson={toggleExportJson}
-        exportAllJson={exportAllJson}
-        showExportAllJson={showExportAllJson}
-        toggleExportAllJson={toggleExportAllJson}
-        handleImportAllObject={handleImportAllObject}
-        handleImportObject={handleImportObject}
-      />
+            <HabitList habits={habits} toggleHabit={toggleHabit} />
 
-      <Timeline habits={habits} pathPoints={pathPoints} skaterPosition={skaterPosition} />
+            <Controls
+              handlePlay={handlePlay}
+              handleReplay={handleReplay}
+              canPlay={canPlay}
+              canReplay={canReplay}
+              handleReset={handleReset}
+              exportJson={exportJson}
+              showExportJson={showExportJson}
+              toggleExportJson={toggleExportJson}
+              exportAllJson={exportAllJson}
+              showExportAllJson={showExportAllJson}
+              toggleExportAllJson={toggleExportAllJson}
+              handleImportAllObject={handleImportAllObject}
+              handleImportObject={handleImportObject}
+            />
+          </div>
+
+          <Timeline habits={habits} pathPoints={pathPoints} skaterPosition={skaterPosition} />
+        </div>
+
+        <SocialPanel
+          friendName={friendName}
+          setFriendName={setFriendName}
+          friendPoints={friendPoints}
+          setFriendPoints={setFriendPoints}
+          friends={profile.friends}
+          leaderboard={leaderboard}
+          onAddFriend={handleAddFriend}
+          onRemoveFriend={handleRemoveFriend}
+        />
+
+        <ShopPanel
+          points={points}
+          items={shopItems}
+          purchases={profile.purchases}
+          onBuyItem={handleBuyItem}
+        />
+      </div>
     </main>
   );
 }

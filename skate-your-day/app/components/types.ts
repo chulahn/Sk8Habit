@@ -13,3 +13,23 @@ export type DayData = {
 };
 
 export type Point = [number, number];
+
+export type Friend = {
+  id: number;
+  name: string;
+  points: number;
+};
+
+export type ShopItem = {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+};
+
+export type ProgressProfile = {
+  displayName: string;
+  friends: Friend[];
+  purchases: string[];
+  appUseDates: string[];
+};
