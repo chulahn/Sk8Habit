@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "prisma generate --schema prisma/schema.sqlite.prisma && prisma db push --schema prisma/schema.sqlite.prisma && next dev",
+    "build": "prisma generate && prisma generate --schema prisma/schema.sqlite.prisma && next build",
     "start": "next start",
     "lint": "eslint"
   },

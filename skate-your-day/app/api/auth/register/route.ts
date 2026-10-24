@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import {
+  createAuthUser,
+  findAuthUser,
+  getAuthDatabase,
+} from "@/lib/prisma";
 import { hash } from "bcrypt";
 
 export async function POST(req: Request) {
@@ -8,11 +12,16 @@ export async function POST(req: Request) {
     const { name, email, password } = body;
     if (!email || !password) return NextResponse.json({ error: "Missing" }, { status: 400 });
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const authDatabase = await getAuthDatabase();
+    const existing = await findAuthUser(authDatabase, email);
     if (existing) return NextResponse.json({ error: "Email exists" }, { status: 409 });
 
     const passwordHash = await hash(password, 10);
-    const user = await prisma.user.create({ data: { name: name || null, email, password: passwordHash } });
+    const user = await createAuthUser(authDatabase, {
+      name: name || null,
+      email,
+      password: passwordHash,
+    });
     return NextResponse.json({ ok: true, userId: user.id });
   } catch (err) {
     console.error(err);

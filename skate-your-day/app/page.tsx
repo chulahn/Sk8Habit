@@ -42,6 +42,25 @@ function getCurrentTimeHHMM() {
   return `${h}:${m}`;
 }
 
+function getNextDayId(dayId: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayId)) return null;
+  const [year, month, day] = dayId.split("-").map(Number);
+  const date = new Date(year, month - 1, day, 12);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  date.setDate(date.getDate() + 1);
+  const nextYear = date.getFullYear();
+  const nextMonth = String(date.getMonth() + 1).padStart(2, "0");
+  const nextDay = String(date.getDate()).padStart(2, "0");
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
 // Base template for NEW days (not hardcoded ones)
 const baseHabitsTemplate = [
   {
@@ -378,6 +397,10 @@ function HomeContent() {
   const activeDay =
     days.find((d) => d.id === activeDayId) ?? days[0] ?? null;
   const habits: Habit[] = activeDay?.habits ?? [];
+  const nextDayId = activeDay ? getNextDayId(activeDay.id) : null;
+  const nextDayExists = nextDayId
+    ? days.some((day) => day.id === nextDayId)
+    : false;
 
   const completedCount = days.reduce(
     (total, day) =>
@@ -491,6 +514,25 @@ function HomeContent() {
         };
       })
     );
+  };
+
+  const handlePlanNextDay = () => {
+    if (!activeDay || !nextDayId) return;
+
+    if (nextDayExists) {
+      setActiveDayId(nextDayId);
+      return;
+    }
+
+    const nextDay: DayData = {
+      id: nextDayId,
+      habits: activeDay.habits.map((habit) => ({
+        ...habit,
+        completed: false,
+      })),
+    };
+    setDays((previous) => [...previous, nextDay]);
+    setActiveDayId(nextDay.id);
   };
 
   const handlePlay = () => {
@@ -847,7 +889,14 @@ function HomeContent() {
           purchasedCount={profile.purchases.length}
         />
 
-        <DayTabs days={days} activeDayId={activeDayId} setActiveDayId={setActiveDayId} todayId={todayId} />
+        <DayTabs
+          days={days}
+          activeDayId={activeDayId}
+          setActiveDayId={setActiveDayId}
+          todayId={todayId}
+          nextDayExists={nextDayExists}
+          onPlanNextDay={handlePlanNextDay}
+        />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
           <div className="flex flex-col gap-6">

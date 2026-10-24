@@ -2,7 +2,12 @@ import NextAuth from "next-auth";
 import type { NextAuthOptions } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
-import prisma from "@/lib/prisma";
+import {
+  findAuthUser,
+  getAuthDatabase,
+  recordFailedLoginAttempt,
+  recordLogin,
+} from "@/lib/prisma";
 import { compare } from "bcrypt";
 
 type SessionUserWithId = {
@@ -24,13 +29,12 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials) return null;
         const { email, password } = credentials as { email: string; password: string };
-        const user = await prisma.user.findUnique({ where: { email } });
+        const authDatabase = await getAuthDatabase();
+        const user = await findAuthUser(authDatabase, email);
         if (!user) {
           // Log failed login attempt (user not found)
           try {
-            await prisma.failedLoginAttempt.create({
-              data: { email, userId: 0 },
-            });
+            await recordFailedLoginAttempt(authDatabase, { email, userId: 0 });
           } catch {
             // Ignore if user doesn't exist for FK constraint
           }
@@ -39,28 +43,36 @@ export const authOptions: NextAuthOptions = {
         const isValid = await compare(password, user.password);
         if (!isValid) {
           // Log failed login attempt (wrong password)
-          await prisma.failedLoginAttempt.create({
-            data: { email, userId: user.id },
+          await recordFailedLoginAttempt(authDatabase, {
+            email,
+            userId: user.id,
           });
           return null;
         }
         // Log successful login
-        await prisma.loginHistory.create({
-          data: { userId: user.id },
-        });
-        return { id: String(user.id), name: user.name ?? null, email: user.email };
+        await recordLogin(authDatabase, user.id);
+        return {
+          id: String(user.id),
+          name: user.name ?? null,
+          email: user.email,
+          authDatabase,
+        };
       },
     }),
   ],
   session: { strategy: "jwt" },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) (token as TokenWithId).id = user.id;
+      if (user) {
+        (token as TokenWithId).id = user.id;
+        token.authDatabase = user.authDatabase;
+      }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
         (session.user as SessionUserWithId).id = (token as TokenWithId).id;
+        session.authDatabase = token.authDatabase;
       }
       return session;
     },

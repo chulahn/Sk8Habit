@@ -19,6 +19,8 @@
 
 # production
 /build
+/prisma/auth-fallback.db
+/prisma/generated/
 
 # misc
 .DS_Store
