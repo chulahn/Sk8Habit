@@ -24,6 +24,7 @@ import Timeline from "./components/Timeline";
 import ProgressPanel from "./components/ProgressPanel";
 import SocialPanel from "./components/SocialPanel";
 import ShopPanel from "./components/ShopPanel";
+import WeekView from "./components/WeekView";
 
 // ---------- helpers ----------
 
@@ -59,6 +60,19 @@ function getNextDayId(dayId: string): string | null {
   const nextMonth = String(date.getMonth() + 1).padStart(2, "0");
   const nextDay = String(date.getDate()).padStart(2, "0");
   return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
+function getWeekDayIds(dayId: string): string[] {
+  const [year, month, day] = dayId.split("-").map(Number);
+  const date = new Date(year, month - 1, day, 12);
+  const daysFromMonday = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - daysFromMonday);
+
+  return Array.from({ length: 7 }, () => {
+    const id = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    date.setDate(date.getDate() + 1);
+    return id;
+  });
 }
 
 // Base template for NEW days (not hardcoded ones)
@@ -435,6 +449,7 @@ function HomeContent() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0); // 0 → 1 along path
+  const [viewMode, setViewMode] = useState<"day" | "week">("day");
 
   const [newName, setNewName] = useState("");
   const [newTime, setNewTime] = useState(""); // empty = use current time
@@ -516,23 +531,43 @@ function HomeContent() {
     );
   };
 
-  const handlePlanNextDay = () => {
-    if (!activeDay || !nextDayId) return;
+  const toggleHabitForDay = (dayId: string, habitId: number) => {
+    setDays((previous) =>
+      previous.map((day) =>
+        day.id === dayId
+          ? {
+              ...day,
+              habits: day.habits.map((habit) =>
+                habit.id === habitId
+                  ? { ...habit, completed: !habit.completed }
+                  : habit,
+              ),
+            }
+          : day,
+      ),
+    );
+  };
 
-    if (nextDayExists) {
-      setActiveDayId(nextDayId);
+  const handlePlanDay = (dayId: string) => {
+    if (days.some((day) => day.id === dayId)) {
+      setActiveDayId(dayId);
       return;
     }
 
-    const nextDay: DayData = {
-      id: nextDayId,
-      habits: activeDay.habits.map((habit) => ({
+    const plannedDay: DayData = {
+      id: dayId,
+      habits: (activeDay?.habits ?? []).map((habit) => ({
         ...habit,
         completed: false,
       })),
     };
-    setDays((previous) => [...previous, nextDay]);
-    setActiveDayId(nextDay.id);
+    setDays((previous) => [...previous, plannedDay]);
+    setActiveDayId(dayId);
+  };
+
+  const handlePlanNextDay = () => {
+    if (!activeDay || !nextDayId) return;
+    handlePlanDay(nextDayId);
   };
 
   const handlePlay = () => {
@@ -861,6 +896,7 @@ function HomeContent() {
   const canReplay = pathPoints.length >= 2 && !isPlaying && progress >= 1;
 
   const todayId = getTodayId();
+  const weekDayIds = getWeekDayIds(activeDay?.id ?? todayId);
 
   return (
     <main className="min-h-screen bg-slate-950 p-4 text-slate-100 sm:p-8">
@@ -898,39 +934,73 @@ function HomeContent() {
           onPlanNextDay={handlePlanNextDay}
         />
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
-          <div className="flex flex-col gap-6">
-            <AddHabitForm
-              activeDayId={activeDay?.id}
-              newName={newName}
-              setNewName={setNewName}
-              newTime={newTime}
-              setNewTime={setNewTime}
-              formError={formError}
-              handleAddHabit={handleAddHabit}
-            />
+        <div className="flex gap-1 self-start rounded-full border border-slate-700 bg-slate-900 p-1">
+          {(["day", "week"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setViewMode(mode)}
+              aria-pressed={viewMode === mode}
+              className={`rounded-full px-4 py-2 text-sm font-semibold capitalize transition-colors ${
+                viewMode === mode
+                  ? "bg-emerald-400 text-slate-950"
+                  : "text-slate-300 hover:bg-slate-800"
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
 
-            <HabitList habits={habits} toggleHabit={toggleHabit} />
+        {viewMode === "day" ? (
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
+            <div className="flex flex-col gap-6">
+              <AddHabitForm
+                activeDayId={activeDay?.id}
+                newName={newName}
+                setNewName={setNewName}
+                newTime={newTime}
+                setNewTime={setNewTime}
+                formError={formError}
+                handleAddHabit={handleAddHabit}
+              />
 
-            <Controls
-              handlePlay={handlePlay}
-              handleReplay={handleReplay}
-              canPlay={canPlay}
-              canReplay={canReplay}
-              handleReset={handleReset}
-              exportJson={exportJson}
-              showExportJson={showExportJson}
-              toggleExportJson={toggleExportJson}
-              exportAllJson={exportAllJson}
-              showExportAllJson={showExportAllJson}
-              toggleExportAllJson={toggleExportAllJson}
-              handleImportAllObject={handleImportAllObject}
-              handleImportObject={handleImportObject}
+              <HabitList habits={habits} toggleHabit={toggleHabit} />
+
+              <Controls
+                handlePlay={handlePlay}
+                handleReplay={handleReplay}
+                canPlay={canPlay}
+                canReplay={canReplay}
+                handleReset={handleReset}
+                exportJson={exportJson}
+                showExportJson={showExportJson}
+                toggleExportJson={toggleExportJson}
+                exportAllJson={exportAllJson}
+                showExportAllJson={showExportAllJson}
+                toggleExportAllJson={toggleExportAllJson}
+                handleImportAllObject={handleImportAllObject}
+                handleImportObject={handleImportObject}
+              />
+            </div>
+
+            <Timeline
+              habits={habits}
+              pathPoints={pathPoints}
+              skaterPosition={skaterPosition}
             />
           </div>
-
-          <Timeline habits={habits} pathPoints={pathPoints} skaterPosition={skaterPosition} />
-        </div>
+        ) : (
+          <WeekView
+            days={days}
+            weekDayIds={weekDayIds}
+            todayId={todayId}
+            activeDayId={activeDayId}
+            onSelectDay={setActiveDayId}
+            onPlanDay={handlePlanDay}
+            onToggleHabit={toggleHabitForDay}
+          />
+        )}
 
         <SocialPanel
           friendName={friendName}
