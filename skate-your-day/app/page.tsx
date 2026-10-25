@@ -25,6 +25,7 @@ import ProgressPanel from "./components/ProgressPanel";
 import SocialPanel from "./components/SocialPanel";
 import ShopPanel from "./components/ShopPanel";
 import WeekView from "./components/WeekView";
+import { useDevelopmentMode } from "./components/DevelopmentModeContext";
 
 // ---------- helpers ----------
 
@@ -450,6 +451,7 @@ function HomeContent() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0); // 0 → 1 along path
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
+  const [developmentMode] = useDevelopmentMode();
 
   const [newName, setNewName] = useState("");
   const [newTime, setNewTime] = useState(""); // empty = use current time
@@ -1003,16 +1005,18 @@ function HomeContent() {
           />
         )}
 
-        <SocialPanel
-          friendName={friendName}
-          setFriendName={setFriendName}
-          friendPoints={friendPoints}
-          setFriendPoints={setFriendPoints}
-          friends={profile.friends}
-          leaderboard={leaderboard}
-          onAddFriend={handleAddFriend}
-          onRemoveFriend={handleRemoveFriend}
-        />
+        {!developmentMode && (
+          <SocialPanel
+            friendName={friendName}
+            setFriendName={setFriendName}
+            friendPoints={friendPoints}
+            setFriendPoints={setFriendPoints}
+            friends={profile.friends}
+            leaderboard={leaderboard}
+            onAddFriend={handleAddFriend}
+            onRemoveFriend={handleRemoveFriend}
+          />
+        )}
 
         <ShopPanel
           points={points}
