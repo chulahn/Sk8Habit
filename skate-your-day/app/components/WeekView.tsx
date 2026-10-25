@@ -49,8 +49,18 @@ export default function WeekView({
     () => new Set(),
   );
   const previousCompletedHabits = useRef(new Map<string, Set<number>>());
+  const weekScrollerRef = useRef<HTMLDivElement>(null);
 
   const daysById = new Map(days.map((day) => [day.id, day]));
+
+  const scrollWeek = (direction: -1 | 1) => {
+    const scroller = weekScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({
+      left: scroller.clientWidth * direction,
+      behavior: "smooth",
+    });
+  };
 
   useEffect(() => {
     const completedByDay = new Map(
@@ -88,15 +98,36 @@ export default function WeekView({
         <div>
           <h2 className="text-lg font-semibold text-slate-100">Your weekly line</h2>
           <p className="text-sm text-slate-400">
-            See each day&apos;s route and check off tasks as you land them.
+            Swipe through your week and check off tasks as you land them.
           </p>
         </div>
-        <p className="text-xs text-slate-500">
-          {weekDayIds[0]} — {weekDayIds[weekDayIds.length - 1]}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="hidden text-xs text-slate-500 sm:block">
+            {weekDayIds[0]} — {weekDayIds[weekDayIds.length - 1]}
+          </p>
+          <button
+            type="button"
+            onClick={() => scrollWeek(-1)}
+            aria-label="Scroll to previous days"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-200 transition-colors hover:bg-slate-800"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollWeek(1)}
+            aria-label="Scroll to next days"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-200 transition-colors hover:bg-slate-800"
+          >
+            →
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div
+        ref={weekScrollerRef}
+        className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2"
+      >
         {weekDayIds.map((dayId) => {
           const day = daysById.get(dayId);
           const { weekday, date } = getDayLabel(dayId);
@@ -108,7 +139,7 @@ export default function WeekView({
           return (
             <article
               key={dayId}
-              className={`min-w-0 rounded-xl border p-3 ${
+              className={`min-w-0 flex-none basis-[calc((100%-1.5rem)/3)] snap-start rounded-xl border p-3 sm:basis-[calc((100%-2.25rem)/4)] ${
                 hasCompletedTasks
                   ? activeDayId === dayId
                     ? "border-emerald-400 bg-emerald-400/15"

@@ -20,9 +20,32 @@ export default function DayTabs({
   nextDayExists,
   onPlanNextDay,
 }: Props) {
+  const daysScrollerRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollDays = (direction: -1 | 1) => {
+    const scroller = daysScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({
+      left: scroller.clientWidth * direction,
+      behavior: "smooth",
+    });
+  };
+
   return (
-    <section className="mb-4 flex flex-col gap-3 sm:mb-2 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-wrap gap-2">
+    <section className="mb-2 flex min-w-0 flex-col gap-2 sm:mb-1">
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => scrollDays(-1)}
+          aria-label="Scroll to earlier days"
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-200 transition-colors hover:bg-slate-800"
+        >
+          ←
+        </button>
+        <div
+          ref={daysScrollerRef}
+          className="flex min-w-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth whitespace-nowrap pb-1"
+        >
         {days
           .slice()
           .sort((a, b) => a.id.localeCompare(b.id))
@@ -33,7 +56,7 @@ export default function DayTabs({
               <button
                 key={day.id}
                 onClick={() => setActiveDayId(day.id)}
-                className={`rounded-full border px-3 py-2 text-sm font-semibold transition-all sm:py-1.5 sm:text-xs ${
+                className={`flex-none snap-start rounded-full border px-3 py-2 text-sm font-semibold transition-all sm:py-1.5 sm:text-xs ${
                   isActive
                     ? "border-transparent bg-emerald-500 text-emerald-950"
                     : "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
@@ -46,8 +69,17 @@ export default function DayTabs({
               </button>
             );
           })}
+        </div>
+        <button
+          type="button"
+          onClick={() => scrollDays(1)}
+          aria-label="Scroll to later days"
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-200 transition-colors hover:bg-slate-800"
+        >
+          →
+        </button>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-400">
           Start a new line with this day&apos;s tasks.
         </p>

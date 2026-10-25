@@ -7,11 +7,12 @@ interface Props {
 	habits: Habit[];
 	pathPoints: Point[];
 	skaterPosition: Point | null;
+	className?: string;
 }
 
-export default function Timeline({ habits, pathPoints, skaterPosition }: Props) {
+export default function Timeline({ habits, pathPoints, skaterPosition, className }: Props) {
 	return (
-		<div className="mt-2 w-full max-w-3xl aspect-[3/1] sm:aspect-[16/5] rounded-2xl p-3 bg-slate-950 border border-slate-700/70 bg-[radial-gradient(circle_at_top_left,#22c55e22,transparent_60%),radial-gradient(circle_at_bottom_right,#3b82f622,transparent_60%)]">
+		<div className={`w-full max-w-3xl aspect-[2/1] sm:aspect-[16/5] rounded-2xl p-3 bg-slate-950 border border-slate-700/70 bg-[radial-gradient(circle_at_top_left,#22c55e22,transparent_60%),radial-gradient(circle_at_bottom_right,#3b82f622,transparent_60%)] ${className ?? ""}`}>
 			<svg viewBox="0 0 100 100" className="w-full h-full">
 				{/* time grid */}
 				{[0, 25, 50, 75, 100].map((x) => (
@@ -45,4 +46,3 @@ export default function Timeline({ habits, pathPoints, skaterPosition }: Props) 
 		</div>
 	);
 }
-

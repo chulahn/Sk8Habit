@@ -900,7 +900,7 @@ function HomeContent() {
 
   return (
     <main className="min-h-screen bg-slate-950 p-4 text-slate-100 sm:p-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:gap-6">
         <header className="flex flex-col gap-3 pt-10 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold sm:text-3xl">Skate Your Day</h1>
@@ -909,7 +909,7 @@ function HomeContent() {
               rewards in the shop.
             </p>
           </div>
-          <div className="rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-right">
+          <div className="hidden rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-right sm:block">
             <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200">
               Current balance
             </p>
@@ -954,7 +954,7 @@ function HomeContent() {
 
         {viewMode === "day" ? (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
-            <div className="flex flex-col gap-6">
+            <div className="order-2 flex flex-col gap-4 sm:gap-6 xl:order-1">
               <AddHabitForm
                 activeDayId={activeDay?.id}
                 newName={newName}
@@ -985,6 +985,7 @@ function HomeContent() {
             </div>
 
             <Timeline
+              className="order-1 xl:order-2"
               habits={habits}
               pathPoints={pathPoints}
               skaterPosition={skaterPosition}
