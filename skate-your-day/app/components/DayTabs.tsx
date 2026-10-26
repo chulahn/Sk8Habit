@@ -52,14 +52,21 @@ export default function DayTabs({
           .map((day) => {
             const isActive = day.id === activeDayId;
             const isToday = day.id === todayId;
+            const hasCompletedTasks = day.habits.some(
+              (habit) => habit.completed,
+            );
             return (
               <button
                 key={day.id}
                 onClick={() => setActiveDayId(day.id)}
                 className={`flex-none snap-start rounded-full border px-3 py-2 text-sm font-semibold transition-all sm:py-1.5 sm:text-xs ${
-                  isActive
-                    ? "border-transparent bg-emerald-500 text-emerald-950"
-                    : "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                  hasCompletedTasks
+                    ? isActive
+                      ? "border-emerald-300 bg-emerald-500 text-emerald-950"
+                      : "border-emerald-500/40 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25"
+                    : isActive
+                      ? "border-transparent bg-emerald-500 text-emerald-950"
+                      : "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
                 }`}
               >
                 {day.id}
