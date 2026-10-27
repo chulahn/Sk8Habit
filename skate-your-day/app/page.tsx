@@ -337,7 +337,7 @@ function HomeContent() {
     if (!days.some((d) => d.id === activeDayId)) {
       if (days.some((d) => d.id === todayId)) {
         setActiveDayId(todayId);
-      } else if (days.length > 0) {
+      } else if (activeDayId !== todayId && days.length > 0) {
         setActiveDayId(days[0].id);
       }
     }

@@ -21,10 +21,46 @@ export default function DayTabs({
   onPlanNextDay,
 }: Props) {
   const daysScrollerRef = React.useRef<HTMLDivElement>(null);
+  const activeDayButtonRef = React.useRef<HTMLButtonElement>(null);
+  const hasUserNavigated = React.useRef(false);
+  const sortedDays = days.slice().sort((a, b) => a.id.localeCompare(b.id));
+  const dayIds = sortedDays.map((day) => day.id).join(",");
+
+  React.useLayoutEffect(() => {
+    const scroller = daysScrollerRef.current;
+    const activeButton = activeDayButtonRef.current;
+    if (hasUserNavigated.current || !scroller || !activeButton) return;
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        if (hasUserNavigated.current) return;
+
+        const scrollerRect = scroller.getBoundingClientRect();
+        const buttonRect = activeButton.getBoundingClientRect();
+        const buttonRight =
+          scroller.scrollLeft + buttonRect.right - scrollerRect.left;
+
+        scroller.scrollLeft = Math.max(
+          0,
+          Math.min(
+            buttonRight - scroller.clientWidth,
+            scroller.scrollWidth - scroller.clientWidth,
+          ),
+        );
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [activeDayId, dayIds]);
 
   const scrollDays = (direction: -1 | 1) => {
     const scroller = daysScrollerRef.current;
     if (!scroller) return;
+    hasUserNavigated.current = true;
     scroller.scrollBy({
       left: scroller.clientWidth * direction,
       behavior: "smooth",
@@ -44,12 +80,15 @@ export default function DayTabs({
         </button>
         <div
           ref={daysScrollerRef}
-          className="flex min-w-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto scroll-smooth whitespace-nowrap pb-1"
+          onPointerDown={() => {
+            hasUserNavigated.current = true;
+          }}
+          onWheel={() => {
+            hasUserNavigated.current = true;
+          }}
+          className="flex min-w-0 flex-1 gap-2 overflow-x-auto whitespace-nowrap pb-1"
         >
-        {days
-          .slice()
-          .sort((a, b) => a.id.localeCompare(b.id))
-          .map((day) => {
+          {sortedDays.map((day) => {
             const isActive = day.id === activeDayId;
             const isToday = day.id === todayId;
             const hasCompletedTasks = day.habits.some(
@@ -57,9 +96,12 @@ export default function DayTabs({
             );
             return (
               <button
+                type="button"
                 key={day.id}
+                ref={isActive ? activeDayButtonRef : undefined}
                 onClick={() => setActiveDayId(day.id)}
-                className={`flex-none snap-start rounded-full border px-3 py-2 text-sm font-semibold transition-all sm:py-1.5 sm:text-xs ${
+                aria-pressed={isActive}
+                className={`flex-none rounded-full border px-3 py-2 text-sm font-semibold transition-all sm:py-1.5 sm:text-xs ${
                   hasCompletedTasks
                     ? isActive
                       ? "border-emerald-300 bg-emerald-500 text-emerald-950"
