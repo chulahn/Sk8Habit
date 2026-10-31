@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import {
   useState,
@@ -25,6 +26,7 @@ import ProgressPanel from "./components/ProgressPanel";
 import SocialPanel from "./components/SocialPanel";
 import ShopPanel from "./components/ShopPanel";
 import WeekView from "./components/WeekView";
+import MonthView from "./components/MonthView";
 import { useDevelopmentMode } from "./components/DevelopmentModeContext";
 
 // ---------- helpers ----------
@@ -72,6 +74,19 @@ function getWeekDayIds(dayId: string): string[] {
   return Array.from({ length: 7 }, () => {
     const id = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     date.setDate(date.getDate() + 1);
+    return id;
+  });
+}
+
+function getMonthDayIds(dayId: string): string[] {
+  const [year, month] = dayId.split("-").map(Number);
+  const firstOfMonth = new Date(year, month - 1, 1, 12);
+  const startOffset = (firstOfMonth.getDay() + 6) % 7;
+  firstOfMonth.setDate(firstOfMonth.getDate() - startOffset);
+
+  return Array.from({ length: 42 }, () => {
+    const id = `${firstOfMonth.getFullYear()}-${String(firstOfMonth.getMonth() + 1).padStart(2, "0")}-${String(firstOfMonth.getDate()).padStart(2, "0")}`;
+    firstOfMonth.setDate(firstOfMonth.getDate() + 1);
     return id;
   });
 }
@@ -273,21 +288,26 @@ function HomeContent() {
   // ---------- days + active day ----------
 
   const [days, setDays] = useState<DayData[]>(() => {
+    let initialDays: DayData[] = testDaysSeed;
+
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("skateDays");
       if (saved) {
         try {
           const parsed = JSON.parse(saved) as DayData[];
           if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
+            initialDays = parsed;
           }
         } catch {
           // ignore
         }
       }
     }
-    // If nothing saved, start with test data so you can see multiple tabs
-    return testDaysSeed;
+
+    const todayId = getTodayId();
+    return initialDays.some((day) => day.id === todayId)
+      ? initialDays
+      : [...initialDays, createDay(todayId)];
   });
 
   const [profile, setProfile] = useState<ProgressProfile>(() => {
@@ -329,28 +349,6 @@ function HomeContent() {
   const [activeDayId, setActiveDayId] = useState<string>(getTodayId);
   const { data: session, status: sessionStatus } = useSession();
   const syncingFromServerRef = useRef(false);
-
-  // After days load / change, make sure we have an active day (but don't force switch)
-  useEffect(() => {
-    const todayId = getTodayId();
-    // Only auto-set active day if it no longer exists
-    if (!days.some((d) => d.id === activeDayId)) {
-      if (days.some((d) => d.id === todayId)) {
-        setActiveDayId(todayId);
-      } else if (activeDayId !== todayId && days.length > 0) {
-        setActiveDayId(days[0].id);
-      }
-    }
-  }, [days, activeDayId]);
-
-  // Ensure today exists as a day (random y assigned only here for new days)
-  useEffect(() => {
-    const todayId = getTodayId();
-    setDays((prev) => {
-      if (prev.some((d) => d.id === todayId)) return prev;
-      return [...prev, createDay(todayId)];
-    });
-  }, []);
 
   // Persist days whenever they change
   useEffect(() => {
@@ -409,8 +407,13 @@ function HomeContent() {
     }
   }, [sessionStatus]);
 
+  const effectiveActiveDayId = days.some((day) => day.id === activeDayId)
+    ? activeDayId
+    : days.some((day) => day.id === getTodayId())
+      ? getTodayId()
+      : days[0]?.id ?? getTodayId();
   const activeDay =
-    days.find((d) => d.id === activeDayId) ?? days[0] ?? null;
+    days.find((d) => d.id === effectiveActiveDayId) ?? days[0] ?? null;
   const habits: Habit[] = activeDay?.habits ?? [];
   const nextDayId = activeDay ? getNextDayId(activeDay.id) : null;
   const nextDayExists = nextDayId
@@ -450,7 +453,7 @@ function HomeContent() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0); // 0 → 1 along path
-  const [viewMode, setViewMode] = useState<"day" | "week">("day");
+  const [viewMode, setViewMode] = useState<"day" | "week" | "month">("day");
   const [developmentMode] = useDevelopmentMode();
 
   const [newName, setNewName] = useState("");
@@ -787,21 +790,37 @@ function HomeContent() {
     setShowExportJson(false);
   }, [activeDayId]);
 
+  type ImportedHabit = {
+    id?: number | string;
+    name?: string;
+    timeLabel?: string;
+    timeMins?: number;
+    y?: number;
+    completed?: boolean;
+  };
+
+  type ImportedDay = {
+    id: string;
+    habits: ImportedHabit[];
+  };
+
+  const isImportedDay = (value: unknown): value is ImportedDay => {
+    return !!value && typeof value === "object" && "id" in value &&
+      typeof (value as { id?: unknown }).id === "string" &&
+      "habits" in value &&
+      Array.isArray((value as { habits?: unknown }).habits);
+  };
+
   // Import handler that accepts a parsed JSON object (DayData or array)
-  const handleImportObject = (parsed: any) => {
+  const handleImportObject = (parsed: unknown) => {
     if (!parsed) {
       alert("No JSON provided for import.");
       return;
     }
 
-    const toUpsert: any[] = Array.isArray(parsed) ? parsed : [parsed];
+    const toUpsert: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
 
-    const validDays = toUpsert.filter((d) => {
-      if (!d || typeof d !== "object") return false;
-      if (typeof d.id !== "string") return false;
-      if (!Array.isArray(d.habits)) return false;
-      return true;
-    });
+    const validDays = toUpsert.filter(isImportedDay);
 
     if (validDays.length === 0) {
       alert("Imported JSON did not contain valid day data.");
@@ -812,13 +831,13 @@ function HomeContent() {
       const copy = [...prev];
       for (const d of validDays) {
         const existingIndex = copy.findIndex((x) => x.id === d.id);
-        const normalizedHabits = (d.habits || []).map((h: any) => ({
-          id: Number(h.id) || 0,
-          name: String(h.name || ""),
-          timeLabel: String(h.timeLabel || "00:00"),
-          timeMins: Number(h.timeMins) || 0,
-          y: Number(h.y) || 50,
-          completed: Boolean(h.completed),
+        const normalizedHabits = d.habits.map((habit) => ({
+          id: Number(habit.id) || 0,
+          name: String(habit.name || ""),
+          timeLabel: String(habit.timeLabel || "00:00"),
+          timeMins: Number(habit.timeMins) || 0,
+          y: Number(habit.y) || 50,
+          completed: Boolean(habit.completed),
         }));
 
         const dayObj = { id: d.id, habits: normalizedHabits };
@@ -836,7 +855,7 @@ function HomeContent() {
   };
 
   // wrapper for importing all-days JSON (delegates to same validation/upsert)
-  const handleImportAllObject = (parsed: any) => {
+  const handleImportAllObject = (parsed: unknown) => {
     handleImportObject(parsed);
   };
 
@@ -899,6 +918,7 @@ function HomeContent() {
 
   const todayId = getTodayId();
   const weekDayIds = getWeekDayIds(activeDay?.id ?? todayId);
+  const monthDayIds = getMonthDayIds(activeDay?.id ?? todayId);
 
   return (
     <main className="min-h-screen bg-slate-950 p-4 text-slate-100 sm:p-8">
@@ -929,7 +949,7 @@ function HomeContent() {
 
         <DayTabs
           days={days}
-          activeDayId={activeDayId}
+          activeDayId={effectiveActiveDayId}
           setActiveDayId={setActiveDayId}
           todayId={todayId}
           nextDayExists={nextDayExists}
@@ -937,7 +957,7 @@ function HomeContent() {
         />
 
         <div className="flex gap-1 self-start rounded-full border border-slate-700 bg-slate-900 p-1">
-          {(["day", "week"] as const).map((mode) => (
+          {(["day", "week", "month"] as const).map((mode) => (
             <button
               key={mode}
               type="button"
@@ -993,15 +1013,24 @@ function HomeContent() {
               skaterPosition={skaterPosition}
             />
           </div>
-        ) : (
+        ) : viewMode === "week" ? (
           <WeekView
             days={days}
             weekDayIds={weekDayIds}
             todayId={todayId}
-            activeDayId={activeDayId}
+            activeDayId={effectiveActiveDayId}
             onSelectDay={setActiveDayId}
             onPlanDay={handlePlanDay}
             onToggleHabit={toggleHabitForDay}
+          />
+        ) : (
+          <MonthView
+            days={days}
+            monthDayIds={monthDayIds}
+            todayId={todayId}
+            activeDayId={effectiveActiveDayId}
+            onSelectDay={setActiveDayId}
+            onPlanDay={handlePlanDay}
           />
         )}
 
